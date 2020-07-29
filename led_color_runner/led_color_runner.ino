@@ -19,27 +19,44 @@ int red_byte = 0;
 int blu_byte = 0;
 int gre_byte = 0;
 
+int packet_size = 0;
+uint32_t palette[5];
+
 void setup() {
   Serial.begin(9600);
 
   strip.begin();
-  strip.setBrightness(10);
+  strip.setBrightness(50);
   set_off();
 }
 
 void loop() {
   // Read in RGB and sets pixel to that value
-  if(Serial.available() == 3)
+  if(Serial.available() > 0)
   {
-    red_byte = Serial.read();
-    blu_byte = Serial.read();
-    gre_byte = Serial.read();
-
-    strip.setPixelColor(200, strip.Color(red_byte, blu_byte, gre_byte));
+    packet_size = Serial.read();
+    for(int i = 0; i < packet_size; i++)
+    {
+      palette[i] = read_RGB();
+      for(int j = 0; j < 20; j++)
+      {
+        strip.setPixelColor(150+(i*20)+j, palette[i]);
+      }
+    }
     strip.show();
   }
   delay(200);
 }
+
+uint32_t read_RGB()
+{
+  red_byte = Serial.read();
+  blu_byte = Serial.read();
+  gre_byte = Serial.read();
+
+  return strip.Color(red_byte, blu_byte, gre_byte);
+}
+
 
 // Set `num` number of pixels to red
 // Used to visually display how many bytes are available on the serial port

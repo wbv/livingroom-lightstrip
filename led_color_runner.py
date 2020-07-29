@@ -10,6 +10,7 @@
 import requests
 import serial
 import time
+import palette_test
 
 # Serial port to Arduino
 ser = serial.Serial('/dev/ttyACM0', 9600)
@@ -35,10 +36,21 @@ def send_color(color):
     ser.write(bytes([color[1]]))
     ser.write(bytes([color[2]]))
 
+def send_palette(colors):
+    packet_size = len(colors)
+    ser.write(bytes([packet_size]))
+    for c in colors:
+        send_color(c)
+
 # Send a single color to the Arduino.
 def run_colors():
+    # Sleep to let serial connection settle
     time.sleep(3)
-    send_color(test_colors[2])
+
+    palette = get_colors()
+    send_palette(palette)
+    print(palette)
+    palette_test.plot_colors(palette)
 
 if __name__ == "__main__":
     run_colors()
