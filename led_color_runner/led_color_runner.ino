@@ -15,9 +15,7 @@
 #define PIN 6
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIX, PIN, NEO_GRB + NEO_KHZ800);
 
-int red_byte = 0;
-int blu_byte = 0;
-int gre_byte = 0;
+uint16_t hsv[3];
 
 int packet_size = 0;
 uint32_t palette[5];
@@ -26,7 +24,7 @@ void setup() {
   Serial.begin(9600);
 
   strip.begin();
-  strip.setBrightness(50);
+  strip.setBrightness(100);
   set_off();
 }
 
@@ -37,10 +35,10 @@ void loop() {
     packet_size = Serial.read();
     for(int i = 0; i < packet_size; i++)
     {
-      palette[i] = read_RGB();
+      palette[i] = read_HSV();
       for(int j = 0; j < 20; j++)
       {
-        strip.setPixelColor(150+(i*20)+j, palette[i]);
+        strip.setPixelColor(100+(i*20)+j, strip.gamma32(palette[i]));
       }
     }
     strip.show();
@@ -48,13 +46,15 @@ void loop() {
   delay(200);
 }
 
-uint32_t read_RGB()
+uint32_t read_HSV()
 {
-  red_byte = Serial.read();
-  blu_byte = Serial.read();
-  gre_byte = Serial.read();
+  hsv[0] = Serial.read();
+  hsv[1] = Serial.read();
+  hsv[2] = Serial.read();
 
-  return strip.Color(red_byte, blu_byte, gre_byte);
+  hsv[0] = int(map(hsv[0], 0, 255, 0, 65535));
+
+  return strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
 }
 
 
