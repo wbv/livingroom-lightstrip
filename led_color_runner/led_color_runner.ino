@@ -1,24 +1,24 @@
-// Author: Kali Regenold
-// Date: July 2020
+// Authors: Kali Regenold, Walter Vaughan
+//    Date: August 2020
 
 // Arduino code to run my LED strip.
-// Reads RGB bytes in from serial and displays them on a pixel.
-// Currently sets pixel 200 because it's one that I can see from my desk.
-// TODO: Retreive several colors from serial and cycle through them.
+// Reads in a color palette (1-6 different colors) and displays it evenly along
+// the entire strip.
 
 #include <Adafruit_NeoPixel.h>
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
 
+// dimensions and structs describing the RGB strip
 #define NUM_PIX 300
 #define PIN 6
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIX, PIN, NEO_GRB + NEO_KHZ800);
 
-uint16_t hsv[3];
-
-int packet_size = 0;
-uint32_t palette[5];
+// a variable-sized array of the colors currently used in our palette
+#define PALETTE_MAX_SZ (6)
+uint32_t palette[PALETTE_MAX_SZ] = {0};
+size_t   palette_sz = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -29,32 +29,57 @@ void setup() {
 }
 
 void loop() {
-  // Read in RGB and sets pixel to that value
   if(Serial.available() > 0)
   {
-    packet_size = Serial.read();
-    for(int i = 0; i < packet_size; i++)
+	update_palette();
+	int pix_per_color = NUM_PIX / palette_sz;
+    for(int i = 0; i < palette_sz; i++)
     {
-      palette[i] = read_HSV();
-      for(int j = 0; j < 20; j++)
+      for(int j = 0; j < pix_per_color; j++)
       {
-        strip.setPixelColor(100+(i*20)+j, strip.gamma32(palette[i]));
+        strip.setPixelColor(pix_per_color*i + j, strip.gamma32(palette[i]));
       }
     }
     strip.show();
   }
-  delay(200);
+  delay(25);
 }
 
-uint32_t read_HSV()
+// updates the palette with the HSV colors sent over serial. First byte tells
+// the size of the palette being sent, and the rest of the bytes are the colors.
+// Each color is three bytes, HSV encoded. A palette larger than
+// (PALETTE_MAX_SZ) simply truncates extra colors recieved.
+void update_palette()
 {
-  hsv[0] = Serial.read();
-  hsv[1] = Serial.read();
-  hsv[2] = Serial.read();
+  uint16_t hsv[3];
+  int new_palette_sz = Serial.read();
 
-  hsv[0] = int(map(hsv[0], 0, 255, 0, 65535));
+  if (new_palette_sz > PALETTE_MAX_SZ)
+	new_palette_sz = PALETTE_MAX_SZ;
 
-  return strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
+  // only process if a valid palette size is received
+  if (new_palette_sz > 0)
+  {
+	palette_sz = new_palette_sz;
+	for (int i = 0; i < palette_sz; i++)
+	{
+	  hsv[0] = Serial.read(); // H
+	  hsv[1] = Serial.read(); // S
+	  hsv[2] = Serial.read(); // V
+
+	  // ColorHSV expects Hue to be a 16-bit integer, so we scale it up
+	  hsv[0] = (uint16_t) map(hsv[0], 0, 255, 0, 65535);
+
+	  // save the resulting color into the palette
+	  palette[i] = strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
+	}
+  }
+
+  // discard any remaining rx'd bytes
+  while (Serial.available() > 0)
+	Serial.read();
+
+  return;
 }
 
 
