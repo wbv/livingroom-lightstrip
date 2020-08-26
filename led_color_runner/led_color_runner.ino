@@ -31,8 +31,8 @@ void setup() {
 void loop() {
   if(Serial.available() > 0)
   {
-	update_palette();
-	int pix_per_color = NUM_PIX / palette_sz;
+    update_palette();
+    int pix_per_color = NUM_PIX / palette_sz;
     for(int i = 0; i < palette_sz; i++)
     {
       for(int j = 0; j < pix_per_color; j++)
@@ -55,29 +55,29 @@ void update_palette()
   int new_palette_sz = Serial.read();
 
   if (new_palette_sz > PALETTE_MAX_SZ)
-	new_palette_sz = PALETTE_MAX_SZ;
+    new_palette_sz = PALETTE_MAX_SZ;
 
   // only process if a valid palette size is received
   if (new_palette_sz > 0)
   {
-	palette_sz = new_palette_sz;
-	for (int i = 0; i < palette_sz; i++)
-	{
-	  hsv[0] = Serial.read(); // H
-	  hsv[1] = Serial.read(); // S
-	  hsv[2] = Serial.read(); // V
+    palette_sz = new_palette_sz;
+    for (int i = 0; i < palette_sz; i++)
+    {
+      hsv[0] = Serial.read(); // H
+      hsv[1] = Serial.read(); // S
+      hsv[2] = Serial.read(); // V
 
-	  // ColorHSV expects Hue to be a 16-bit integer, so we scale it up
-	  hsv[0] = (uint16_t) map(hsv[0], 0, 255, 0, 65535);
+      // ColorHSV expects Hue to be a 16-bit integer, so we scale it up
+      hsv[0] = (uint16_t) map(hsv[0], 0, 255, 0, 65535);
 
-	  // save the resulting color into the palette
-	  palette[i] = strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
-	}
+      // save the resulting color into the palette
+      palette[i] = strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
+    }
   }
 
   // discard any remaining rx'd bytes
   while (Serial.available() > 0)
-	Serial.read();
+    Serial.read();
 
   return;
 }
