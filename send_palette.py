@@ -4,10 +4,9 @@
 # Date: July 2020
 
 # Color grabber for my led strip.
-# Sends RGB Red to Arduino over serial.
 # Requests colors from colormind.io API.
-# TODO: Send colormind colors to Arduino.
-#       Cull the colors, some won't show up nicely.
+# Sends them to an Arduino over a Serial USB cable.
+# TODO: Cull the colors, some won't show up nicely.
 
 import requests
 import serial
