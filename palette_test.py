@@ -3,7 +3,7 @@
 # Author: Kali Regenold
 # Date: July 2020
 
-# Requests a 5-color palette from colormind.io and graphs it.
+# Requests a 5-color palette from colormind.io and saves graph to image.
 
 import requests
 import matplotlib.pyplot as plt

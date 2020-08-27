@@ -37,16 +37,15 @@ def send_color(color):
     ser.write(bytes([color[1]]))
     ser.write(bytes([color[2]]))
 
+# Send the palette size and palette colors to Arduino
 def send_palette(colors):
-    packet_size = len(colors)
-    ser.write(bytes([packet_size]))
+    palette_size = len(colors)
+    ser.write(bytes([palette_size]))
     for c in colors:
         send_color(c)
 
-# Send a single color to the Arduino.
+# Send a single color to Arduino
 def run_colors():
-    # Sleep to let serial connection settle
-
     palette = get_colors()
     for c in palette:
         print(c)
@@ -54,5 +53,6 @@ def run_colors():
     palette_test.plot_colors(palette)
 
 if __name__ == "__main__":
+    # Sleep to let serial connection settle
     time.sleep(3)
     run_colors()
