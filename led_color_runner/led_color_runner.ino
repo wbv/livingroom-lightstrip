@@ -10,6 +10,9 @@
   #include <avr/power.h>
 #endif
 
+#define MIN3(x, y, z) (x<y ? (x<z?x:z) : (y<z?y:z))
+#define MAX3(x, y, z) (x>y ? (x>z?x:z) : (y>z?y:z))
+
 // dimensions and structs describing the RGB strip
 #define NUM_PIX 300
 #define PIN 6
@@ -17,7 +20,8 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIX, PIN, NEO_GRB + NEO_KHZ800);
 
 // a variable-sized array of the colors currently used in our palette
 #define PALETTE_MAX_SZ (6)
-uint32_t palette[PALETTE_MAX_SZ] = {0};
+uint16_t palette_hsv[PALETTE_MAX_SZ][3] = {0};
+uint8_t palette_rgb[PALETTE_MAX_SZ][3] = {0};
 size_t   palette_sz = 0;
 
 void setup() {
@@ -37,7 +41,7 @@ void loop() {
     {
       for(int j = 0; j < pix_per_color; j++)
       {
-        strip.setPixelColor(pix_per_color*i + j, strip.gamma32(palette[i]));
+        strip.setPixelColor(pix_per_color*i + j, strip.gamma32(strip.ColorHSV(palette_hsv[i][0], palette_hsv[i][1], palette_hsv[i][2])));
       }
     }
     strip.show();
@@ -51,7 +55,8 @@ void loop() {
 // (PALETTE_MAX_SZ) simply truncates extra colors recieved.
 void update_palette()
 {
-  uint16_t hsv[3];
+  // uint8_t rgb[3] = {0};
+  uint16_t hsv[3] = {0};
   int new_palette_sz = Serial.read();
 
   if (new_palette_sz > PALETTE_MAX_SZ)
@@ -63,15 +68,12 @@ void update_palette()
     palette_sz = new_palette_sz;
     for (int i = 0; i < palette_sz; i++)
     {
-      hsv[0] = Serial.read(); // H
-      hsv[1] = Serial.read(); // S
-      hsv[2] = Serial.read(); // V
+      while(Serial.available() < 3);
+      palette_rgb[i][0] = Serial.read();
+      palette_rgb[i][1] = Serial.read();
+      palette_rgb[i][2] = Serial.read();
 
-      // ColorHSV expects Hue to be a 16-bit integer, so we scale it up
-      hsv[0] = (uint16_t) map(hsv[0], 0, 255, 0, 65535);
-
-      // save the resulting color into the palette
-      palette[i] = strip.ColorHSV(hsv[0], hsv[1], hsv[2]);
+      RGB_to_HSV(palette_rgb[i], palette_hsv[i]);
     }
   }
 
@@ -82,6 +84,60 @@ void update_palette()
   return;
 }
 
+void RGB_to_HSV(uint8_t rgb[3], uint16_t hsv[3])
+{
+  float rgb_f[3] = {rgb[0]/255.0f, rgb[1]/255.0f, rgb[2]/255.0f};
+  float hsv_f[3] = {0.0, 0.0, 0.0};
+
+  float c_min = MIN3(rgb_f[0], rgb_f[1], rgb_f[2]);
+  float c_max = MAX3(rgb_f[0], rgb_f[1], rgb_f[2]);
+  float c_delta = c_max - c_min;
+
+  // Hue
+  if(c_delta == 0)
+  {
+    hsv_f[0] = 0;
+  }
+  else if(c_max == rgb_f[0])
+  {
+    hsv_f[0] = (rgb_f[1] - rgb_f[2]) / c_delta;
+  }
+  else if(c_max == rgb_f[1])
+  {
+    hsv_f[0] = (rgb_f[2] - rgb_f[0]) / c_delta + 2;
+  }
+  else
+  {
+    hsv_f[0] = (rgb_f[0] - rgb_f[1]) / c_delta + 4;
+  }
+  hsv_f[0] *= 60;
+  if(hsv_f[0] < 0)
+  {
+    hsv_f[0] += 360;
+  }
+
+  // Saturation
+  if(c_max == 0.0)
+  {
+    hsv_f[1] = 0.0;
+  }
+  else
+  {
+    hsv_f[1] = c_delta / c_max;
+  }
+
+  // Value
+  hsv_f[2] = c_max;
+
+  // Map to NeoPixel HSV ranges
+  hsv[0] = (uint16_t) map_f(hsv_f[0], 0, 360, 0, 65535);
+  hsv[1] = (uint16_t) map_f(hsv_f[1], 0,   1, 0,   255);
+  hsv[2] = (uint16_t) map_f(hsv_f[2], 0,   1, 0,   255);
+}
+
+float map_f(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 // Set `num` number of pixels to red
 // Used to visually display how many bytes are available on the serial port

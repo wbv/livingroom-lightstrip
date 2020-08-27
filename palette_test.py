@@ -22,7 +22,8 @@ def plot_colors(color_list):
 
     plt.xlim([0,5])
     plt.ylim([0,5])
-    plt.show()
+    # plt.show()
+    plt.savefig('palette.png', bbox_inches='tight')
 
 if __name__ == "__main__":
     r = requests.post('http://colormind.io/api/', data='{"model":"default"}')

@@ -1,3 +1,4 @@
 __pycache__
 *.swp
 led_color_runner/build
+*.png

@@ -43,53 +43,15 @@ def send_palette(colors):
     for c in colors:
         send_color(c)
 
-#https://www.rapidtables.com/convert/color/rgb-to-hsv.html
-def RGB_to_HSV(color):
-    hsv = [0,0,0]
-
-    rgb_p = [x for x in color]
-    c_max = max(rgb_p)
-    c_min = min(rgb_p)
-    delta = c_max - c_min
-
-    # Hue
-    if delta == 0:
-        hsv[0] = 0
-    elif c_max == rgb_p[0]:
-        hsv[0] = 60*(((rgb_p[1]-rgb_p[2])/delta)%6)
-    elif c_max == rgb_p[1]:
-        hsv[0] = 60*(((rgb_p[2]-rgb_p[0])/delta)+2)
-    elif c_max == rgb_p[2]:
-        hsv[0] = 60*(((rgb_p[0]-rgb_p[1])/delta)+4)
-
-    # Saturation
-    if c_max == 0:
-        hsv[1] = 0
-    else:
-        hsv[1] = delta/c_max
-
-    # Value
-    hsv[2] = c_max
-
-    # Remap to byte-sized pieces
-    hsv[0] = int(map(hsv[0], 0, 360, 0, 255))
-    hsv[1] = int(map(hsv[1], 0, 1, 0, 255))
-
-    return hsv
-
-def map(x, in_min, in_max, out_min, out_max):
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
-
 # Send a single color to the Arduino.
 def run_colors():
     # Sleep to let serial connection settle
 
     palette = get_colors()
-    hsv_palette = [RGB_to_HSV(x) for x in palette]
-    for c in hsv_palette:
+    for c in palette:
         print(c)
-    send_palette(hsv_palette)
-    # palette_test.plot_colors(palette)
+    send_palette(palette)
+    palette_test.plot_colors(palette)
 
 if __name__ == "__main__":
     time.sleep(3)
