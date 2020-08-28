@@ -1,7 +1,7 @@
 // Authors: Kali Regenold, Walter Vaughan
 // Date: August 2020
 
-// Arduino code to run my LED strip.
+// Arduino code to run a 300-pixel individually-addressable RGB LED strip.
 // Reads in a color palette (1-6 different colors) and displays it evenly along
 // the entire strip.
 
@@ -9,6 +9,7 @@
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
+#include <math.h>
 
 #define MIN3(x, y, z) (x<y ? (x<z?x:z) : (y<z?y:z))
 #define MAX3(x, y, z) (x>y ? (x>z?x:z) : (y>z?y:z))
@@ -33,12 +34,19 @@ struct rgb_t {
 // LED strip object
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIX, PIN, NEO_GRB + NEO_KHZ800);
 
+// Computed pixel gradients - contains the interpolated, individual pixel values
+// for a continuous gradient between each color and back to the first.
+//hsv_t gradient_hsv[NUM_PIX] = {0};
+
 // Current color palettes
 hsv_t palette_hsv[PALETTE_MAX_SZ] = {0};
 rgb_t palette_rgb[PALETTE_MAX_SZ] = {0};
 
 // Size of the current palette
 size_t palette_sz = 0;
+// The number of pixels between each color, a function of palette_sz
+size_t interp = NUM_PIX;
+
 
 void setup() {
   Serial.begin(9600);
@@ -49,25 +57,58 @@ void setup() {
 }
 
 void loop() {
-  // Wait for palette to be RX'd
+  // Pixel variables, used for making readable pixel-writing calls.
+  static hsv_t   *px;
+  static uint32_t px32;
+
+  // offset for the marquee loop
+  static int offset = 0;
+
+  // raw pixel buffer data
+  volatile uint8_t *pixels;
+  uint8_t last_pixel[3];
+  size_t px_sz;
+
+  // Update the palette if we RX anything over Serial
   if(Serial.available() > 0)
   {
-    // Read in palette (HSV)
+    // Read in new palette colors over serial connection
     update_palette();
 
-    int pix_per_color = NUM_PIX / palette_sz;
-
-    // Display palette evenly across strip
-    for(int i = 0; i < palette_sz; i++)
+    // Only generate gradients for non-empty palettes
+    if (palette_sz == 0)
     {
-      for(int j = 0; j < pix_per_color; j++)
-      {
-        strip.setPixelColor(pix_per_color*i + j, strip.gamma32(strip.ColorHSV(palette_hsv[i].h, palette_hsv[i].s, palette_hsv[i].v)));
-      }
+      set_off();
     }
-    strip.show();
+    else
+    {
+      generate_gradient();
+      strip.show();
+    }
   }
-  delay(25);
+
+  // Hack: marquee through the generated gradient of pixel colors, relies on
+  // knowing the pixel format of the NeoPixel strip (ours is GRB: 3 bytes)
+  if (palette_sz > 0)
+  {
+    pixels = strip.getPixels();
+
+    // Move the pixel buffer in a circle by three bytes, wrapping the last pixel
+    last_pixel[0] = pixels[(NUM_PIX-1)*3];
+    last_pixel[1] = pixels[(NUM_PIX-1)*3 + 1];
+    last_pixel[2] = pixels[(NUM_PIX-1)*3 + 2];
+    memmove(
+      pixels + 3*sizeof(uint8_t),
+      pixels,
+      sizeof(uint8_t)*(NUM_PIX-1)*3
+    );
+    pixels[0] = last_pixel[0];
+    pixels[1] = last_pixel[1];
+    pixels[2] = last_pixel[2];
+
+    strip.show();
+    delay(40);
+  }
 }
 
 // Update the RGB and HSV palette arrays
@@ -88,12 +129,13 @@ void update_palette()
   {
     // Set global palette size
     palette_sz = new_palette_sz;
+    interp = NUM_PIX / palette_sz;
+
+    while(Serial.available() < 3*palette_sz);
 
     // Read in RGB bytes and convert to HSV
     for (int i = 0; i < palette_sz; i++)
     {
-      // Wait for whole color to be RX'd
-      while(Serial.available() < 3);
       palette_rgb[i].r = Serial.read();
       palette_rgb[i].g = Serial.read();
       palette_rgb[i].b = Serial.read();
@@ -162,6 +204,87 @@ void RGB_to_HSV(rgb_t &rgb, hsv_t &hsv)
   hsv.v = (uint8_t)  map_f(hsv_f[2], 0,   1, 0,   255);
 }
 
+// Compute the HSV value on the gradient of colors stretching the whole strip.
+// `pixel` is somewhere [ 0, NUM_PIX ) and the gradient is each color in the
+// palette, spread out evenly and wrapping back around to the start.
+void generate_gradient(void)
+{
+  // Individual pixel being calculated, in HSV and NeoPixel format
+  hsv_t    px;
+  uint32_t px32;
+
+  // Interpolation variables
+  hsv_t *start, *stop;
+  int delta_h, delta_s, delta_v;
+
+  // Color index into the palette, and index relative to start color
+  size_t color, offset;
+
+  // Empty palettes: black
+  if (palette_sz < 1)
+  {
+    for (int i = 0; i < NUM_PIX; i++)
+    {
+      px32 = strip.gamma32(strip.ColorHSV(0, 0, 0));
+      strip.setPixelColor(i, px32);
+    }
+  }
+
+  // Singular color: totally fill gradient with the color
+  else if (palette_sz == 1)
+  {
+    for (int i = 0; i < NUM_PIX; i++)
+    {
+      px.h = palette_hsv[0].h;
+      px.s = palette_hsv[0].s;
+      px.v = palette_hsv[0].v;
+      px32 = strip.gamma32(strip.ColorHSV(px.h, px.s, px.v));
+      strip.setPixelColor(i, px32);
+    }
+  }
+
+  // 2+ colors: interpolate between them.
+  else
+  {
+    for (int i = 0; i < NUM_PIX; i++)
+    {
+      color = i / interp;
+      offset = i % interp;
+
+      // Interpolate colors from start to stop
+      start = &palette_hsv[color];
+      stop  = &palette_hsv[(color + 1 == palette_sz) ? 0 : color + 1];
+      delta_h = (int)stop->h - (int)start->h;
+      delta_s = (int)stop->s - (int)start->s;
+      delta_v = (int)stop->v - (int)start->v;
+
+      // Hue interpolation
+      px.h = start->h;
+      if (delta_h != 0)
+      {
+        px.h += (uint16_t)floor((float)delta_h * (float)offset / (float)interp);
+      }
+
+      // Saturation interpolation
+      px.s = start->s;
+      if (delta_s != 0)
+      {
+        px.s += (uint16_t)floor((float)delta_s * (float)offset / (float)interp);
+      }
+
+      // Value interpolation
+      px.v = start->v;
+      if (delta_v != 0)
+      {
+        px.v += (uint16_t)floor((float)delta_v * (float)offset / (float)interp);
+      }
+
+      px32 = strip.gamma32(strip.ColorHSV(px.h, px.s, px.v));
+      strip.setPixelColor(i, px32);
+    }
+  }
+}
+
 ///////////////////////////////////////
 // Auxiliary functions
 ///////////////////////////////////////
@@ -175,7 +298,7 @@ float map_f(float x, float in_min, float in_max, float out_min, float out_max) {
 // Used to visually display how many bytes are available on the serial port
 void set_num(int num) {
   set_off();
-  for(int i = 0; i < num; i++){
+  for(int i = 0; i < num && i < NUM_PIX; i++){
     strip.setPixelColor(200+i, strip.Color(255,0,0));
   }
   strip.show();
