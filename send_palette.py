@@ -6,7 +6,6 @@
 # Color grabber for my led strip.
 # Requests colors from colormind.io API.
 # Sends them to an Arduino over a Serial USB cable.
-# TODO: Cull the colors, some won't show up nicely.
 
 import requests
 import serial
@@ -24,7 +23,7 @@ test_colors = [[255,   0,   0],
 # Get colors from colormind.io's API
 def get_colors():
     r = requests.post('http://colormind.io/api/', data='{"model":"default"}')
-    return r.json()['result']
+    return [color for color in r.json()['result'] if max(color) > 44]
 
 # Return a single int value as a bytes object
 def convert_to_bytes(num):
