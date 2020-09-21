@@ -23,7 +23,7 @@ install: $(PROJ_TGT)
 	arduino-cli upload -v -b $(BOARD) -p $(PORT) $(PROJ)
 
 change-color:
-	./led_color_runner.py
+	./send_palette.py
 
 clean:
 	cd $(PROJ) && rm -rf build
