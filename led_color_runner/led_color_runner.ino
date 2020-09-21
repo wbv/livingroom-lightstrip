@@ -17,13 +17,6 @@
 #define PIN              (6)  // Data pin to LED strip
 #define PALETTE_MAX_SZ   (6)  // Max palette size (easily divides NUM_PIX)
 
-// Struct to hold HSV values in the sizes NeoPixel expects
-struct hsv_t {
-  uint16_t h;
-  uint8_t s;
-  uint8_t v;
-};
-
 // Struct to hold byte-sized RGB values
 struct rgb_t {
   uint8_t r;
@@ -34,12 +27,8 @@ struct rgb_t {
 // LED strip object
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_PIX, PIN, NEO_GRB + NEO_KHZ800);
 
-// Computed pixel gradients - contains the interpolated, individual pixel values
-// for a continuous gradient between each color and back to the first.
-//hsv_t gradient_hsv[NUM_PIX] = {0};
-
 // Current color palettes
-hsv_t palette_hsv[PALETTE_MAX_SZ] = {0};
+//hsv_t palette_hsv[PALETTE_MAX_SZ] = {0};
 rgb_t palette_rgb[PALETTE_MAX_SZ] = {0};
 
 // Size of the current palette
@@ -57,17 +46,9 @@ void setup() {
 }
 
 void loop() {
-  // Pixel variables, used for making readable pixel-writing calls.
-  static hsv_t   *px;
-  static uint32_t px32;
-
-  // offset for the marquee loop
-  static int offset = 0;
-
   // raw pixel buffer data
   volatile uint8_t *pixels;
   uint8_t last_pixel[3];
-  size_t px_sz;
 
   // Update the palette if we RX anything over Serial
   if(Serial.available() > 0)
@@ -136,11 +117,9 @@ void update_palette()
     // Read in RGB bytes and convert to HSV
     for (int i = 0; i < palette_sz; i++)
     {
-      palette_rgb[i].r = Serial.read();
-      palette_rgb[i].g = Serial.read();
-      palette_rgb[i].b = Serial.read();
-
-      RGB_to_HSV(palette_rgb[i], palette_hsv[i]);
+      palette_rgb[i].r = strip.gamma8(Serial.read());
+      palette_rgb[i].g = strip.gamma8(Serial.read());
+      palette_rgb[i].b = strip.gamma8(Serial.read());
     }
   }
 
@@ -151,58 +130,6 @@ void update_palette()
   return;
 }
 
-// Convert RGB [0..255] to HSV [0..65535], [0..255], [0..255]
-// Explanation to formula: wikipedia.org/wiki/HSL_and_HSV
-void RGB_to_HSV(rgb_t &rgb, hsv_t &hsv)
-{
-  float rgb_f[3] = {rgb.r/255.0f, rgb.g/255.0f, rgb.b/255.0f};
-  float hsv_f[3] = {0.0, 0.0, 0.0};
-
-  float c_min = MIN3(rgb_f[0], rgb_f[1], rgb_f[2]);
-  float c_max = MAX3(rgb_f[0], rgb_f[1], rgb_f[2]);
-  float c_delta = c_max - c_min;
-
-  // Hue
-  if(c_delta == 0)
-  {
-    hsv_f[0] = 0;
-  }
-  else if(c_max == rgb_f[0])
-  {
-    hsv_f[0] = (rgb_f[1] - rgb_f[2]) / c_delta;
-  }
-  else if(c_max == rgb_f[1])
-  {
-    hsv_f[0] = (rgb_f[2] - rgb_f[0]) / c_delta + 2;
-  }
-  else
-  {
-    hsv_f[0] = (rgb_f[0] - rgb_f[1]) / c_delta + 4;
-  }
-  hsv_f[0] *= 60;
-  if(hsv_f[0] < 0)
-  {
-    hsv_f[0] += 360;
-  }
-
-  // Saturation
-  if(c_max == 0.0)
-  {
-    hsv_f[1] = 0.0;
-  }
-  else
-  {
-    hsv_f[1] = c_delta / c_max;
-  }
-
-  // Value
-  hsv_f[2] = c_max;
-
-  // Map to NeoPixel HSV ranges
-  hsv.h = (uint16_t) map_f(hsv_f[0], 0, 360, 0, 65535);
-  hsv.s = (uint8_t)  map_f(hsv_f[1], 0,   1, 0,   255);
-  hsv.v = (uint8_t)  map_f(hsv_f[2], 0,   1, 0,   255);
-}
 
 // Compute the HSV value on the gradient of colors stretching the whole strip.
 // `pixel` is somewhere [ 0, NUM_PIX ) and the gradient is each color in the
@@ -210,12 +137,12 @@ void RGB_to_HSV(rgb_t &rgb, hsv_t &hsv)
 void generate_gradient(void)
 {
   // Individual pixel being calculated, in HSV and NeoPixel format
-  hsv_t    px;
+  rgb_t    px;
   uint32_t px32;
 
   // Interpolation variables
-  hsv_t *start, *stop;
-  int delta_h, delta_s, delta_v;
+  rgb_t *start, *stop;
+  int delta_r, delta_g, delta_b;
 
   // Color index into the palette, and index relative to start color
   size_t color, offset;
@@ -225,8 +152,7 @@ void generate_gradient(void)
   {
     for (int i = 0; i < NUM_PIX; i++)
     {
-      px32 = strip.gamma32(strip.ColorHSV(0, 0, 0));
-      strip.setPixelColor(i, px32);
+      strip.setPixelColor(i, 0, 0, 0);
     }
   }
 
@@ -235,11 +161,10 @@ void generate_gradient(void)
   {
     for (int i = 0; i < NUM_PIX; i++)
     {
-      px.h = palette_hsv[0].h;
-      px.s = palette_hsv[0].s;
-      px.v = palette_hsv[0].v;
-      px32 = strip.gamma32(strip.ColorHSV(px.h, px.s, px.v));
-      strip.setPixelColor(i, px32);
+      px.r = palette_rgb[0].r;
+      px.g = palette_rgb[0].g;
+      px.b = palette_rgb[0].b;
+      strip.setPixelColor(i, px.r, px.g, px.b);
     }
   }
 
@@ -252,35 +177,34 @@ void generate_gradient(void)
       offset = i % interp;
 
       // Interpolate colors from start to stop
-      start = &palette_hsv[color];
-      stop  = &palette_hsv[(color + 1 == palette_sz) ? 0 : color + 1];
-      delta_h = (int)stop->h - (int)start->h;
-      delta_s = (int)stop->s - (int)start->s;
-      delta_v = (int)stop->v - (int)start->v;
+      start = &palette_rgb[color];
+      stop  = &palette_rgb[(color + 1 == palette_sz) ? 0 : color + 1];
+      delta_r = (int)stop->r - (int)start->r;
+      delta_g = (int)stop->g - (int)start->g;
+      delta_b = (int)stop->b - (int)start->b;
 
-      // Hue interpolation
-      px.h = start->h;
-      if (delta_h != 0)
+      // Red interpolation
+      px.r = start->r;
+      if (delta_r != 0)
       {
-        px.h += (uint16_t)floor((float)delta_h * (float)offset / (float)interp);
+        px.r += (uint8_t)floor((float)delta_r * (float)offset / (float)interp);
       }
 
-      // Saturation interpolation
-      px.s = start->s;
-      if (delta_s != 0)
+      // Green interpolation
+      px.g = start->g;
+      if (delta_g != 0)
       {
-        px.s += (uint16_t)floor((float)delta_s * (float)offset / (float)interp);
+        px.g += (uint8_t)floor((float)delta_g * (float)offset / (float)interp);
       }
 
-      // Value interpolation
-      px.v = start->v;
-      if (delta_v != 0)
+      // Blue interpolation
+      px.b = start->b;
+      if (delta_b != 0)
       {
-        px.v += (uint16_t)floor((float)delta_v * (float)offset / (float)interp);
+        px.b += (uint8_t)floor((float)delta_b * (float)offset / (float)interp);
       }
 
-      px32 = strip.gamma32(strip.ColorHSV(px.h, px.s, px.v));
-      strip.setPixelColor(i, px32);
+      strip.setPixelColor(i, px.r, px.g, px.b);
     }
   }
 }
