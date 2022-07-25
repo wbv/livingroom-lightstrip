@@ -1,31 +1,59 @@
 
-## change these to your pleasing
-# this is the Arduino project name
-PROJ := led_color_runner
+# Compiler options
+##################
 
-# board package as expected by avrdude
-BOARD := arduino:avr:uno
+# which avr-gcc (compiler) to use
+CCPREFIX ?= avr-
+CC := $(CCPREFIX)gcc
 
-# board package dir (TODO: get this automatically from "BOARD"
-BOARD_DIR := arduino.avr.uno
+# these flags can optionally be overridden (default: optimize for code size)
+CFLAGS ?= -Os
 
-# device port that we'll program to
-PORT := /dev/ttyACM0
+# object-copy to use (default: same prefix as your gcc)
+OBJCOPY ?= $(CC:%-gcc=%-objcopy)
 
-PROJ_TGT := $(PROJ)/build/$(BOARD_DIR)/$(PROJ).ino.hex
 
-all: $(PROJ_TGT)
+# Programmer options
+####################
 
-$(PROJ_TGT): $(PROJ)/$(PROJ).ino
-	arduino-cli compile -v -b $(BOARD) -p $(PORT) $(PROJ)
+# which avrdude (programmer) to use
+AVRDUDE ?= avrdude
 
-install: $(PROJ_TGT)
-	arduino-cli upload -v -b $(BOARD) -p $(PORT) $(PROJ)
+# force-upload, skip verification
+AVRDUDEFLAGS ?= -F -V 
+# USB serial port device where the Arduino is attached:
+#  Note: this may vary wildly depending on your machine's configuration
+SERIALPORT ?= /dev/ttyACM0
+SERIALBAUD ?= 115200
+
+
+# disable default rules
+.SUFFIXES:
+
+# default behavior is to build the light-runner firmware in its programmable format (Intel hex)
+all: light-runner.hex
+
+# build a compiled AVR object file
+%.o: %.c
+	$(CC) $(CFLAGS) -DF_CPU=16000000UL -mmcu=atmega328p -c $^ -o $@
+
+# build an AVR executable
+%.elf: %.o
+	$(CC) -mmcu=atmega328p $^ -o $@
+
+# extract the text and data sections to form a programmable file (Intel hex format)
+%.hex: %.elf
+	$(OBJCOPY) -j .text -j .data -O ihex $^ $@
+
+# installation is programming to the arduino attached to the serial port
+install: light-runner.hex
+	$(AVRDUDE) $(AVRDUDEFLAGS) -c arduino -p m328p -P $(SERIALPORT) -b $(SERIALBAUD) -U flash:w:$^:i
 
 change-color:
 	./send_palette.py
 
 clean:
-	cd $(PROJ) && rm -rf build
+	rm -rf light-runner.hex
 
 .PHONY: all install change-color clean
+.SECONDARY: light-runner.elf light-runner.o

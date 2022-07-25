@@ -2,3 +2,8 @@ __pycache__
 *.swp
 led_color_runner/build
 *.png
+
+# ignore comiled files
+light-runner.o
+light-runner.elf
+light-runner.hex
