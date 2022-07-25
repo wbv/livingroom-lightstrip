@@ -3,6 +3,8 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+#include "usart.h"
+
 void main() {
 	uint8_t status;
 	register uint8_t on, off;
@@ -13,8 +15,8 @@ void main() {
 	status = PORTB;
 	on  = status |  (1 << 5); // sets port B5 (LED light) high
 	off = status & ~(1 << 5); // sets port B5 (LED light) Low
-	while (1) {
 
+	while (1) {
 		PORTB = on;
 		_delay_ms(500);
 		PORTB = off;

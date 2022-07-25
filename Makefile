@@ -8,8 +8,8 @@ CC := $(CCPREFIX)gcc
 
 # these flags can optionally be overridden (default: optimize for code size)
 CFLAGS ?= -Os -std=c11 -Wall -Wno-main -pedantic
-#LDFLAGS ?= -Wl,-Map,light-runner.map
-LDFLAGS ?=
+LDFLAGS ?= -flto -fuse-linker-plugin
+#LDFLAGS += -Wl,-Map,light-runner.map
 
 # object-copy to use (default: same prefix as your gcc)
 OBJCOPY ?= $(CC:%-gcc=%-objcopy)
@@ -36,16 +36,19 @@ SERIALBAUD ?= 115200
 all: light-runner.hex
 
 # build a compiled AVR object file
-%.o: %.c
-	$(CC) $(CFLAGS) -DF_CPU=16000000UL -mmcu=atmega328p -c $^ -o $@
+light-runner.o: light-runner.c usart.h
+	$(CC) $(CFLAGS) -DF_CPU=16000000UL -mmcu=atmega328p -c $< -o $@
+
+usart.o: usart.c usart.h
+	$(CC) $(CFLAGS) -DF_CPU=16000000UL -mmcu=atmega328p -c $< -o $@
 
 # build an AVR executable
-%.elf: %.o
+light-runner.elf: light-runner.o usart.o
 	$(CC) -mmcu=atmega328p $(LDFLAGS) $^ -o $@
 
 # extract the text and data sections to form a programmable file (Intel hex format)
 %.hex: %.elf
-	$(OBJCOPY) -j .text -j .data -O ihex $^ $@
+	$(OBJCOPY) -j .text -j .data -O ihex $< $@
 
 # installation is programming to the arduino attached to the serial port
 install: light-runner.hex
@@ -55,7 +58,7 @@ change-color:
 	./send_palette.py
 
 clean:
-	rm -rf light-runner.hex light-runner.elf light-runner.o
+	rm -rf *.hex *.elf *.o *.map
 
 .PHONY: all install change-color clean
-.SECONDARY: light-runner.elf light-runner.o
+.SECONDARY: light-runner.elf light-runner.o usart.o
