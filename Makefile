@@ -7,7 +7,9 @@ CCPREFIX ?= avr-
 CC := $(CCPREFIX)gcc
 
 # these flags can optionally be overridden (default: optimize for code size)
-CFLAGS ?= -Os
+CFLAGS ?= -Os -std=c11 -Wall -Wno-main -pedantic
+#LDFLAGS ?= -Wl,-Map,light-runner.map
+LDFLAGS ?=
 
 # object-copy to use (default: same prefix as your gcc)
 OBJCOPY ?= $(CC:%-gcc=%-objcopy)
@@ -20,7 +22,7 @@ OBJCOPY ?= $(CC:%-gcc=%-objcopy)
 AVRDUDE ?= avrdude
 
 # force-upload, skip verification
-AVRDUDEFLAGS ?= -F -V 
+AVRDUDEFLAGS ?= -F -V
 # USB serial port device where the Arduino is attached:
 #  Note: this may vary wildly depending on your machine's configuration
 SERIALPORT ?= /dev/ttyACM0
@@ -39,7 +41,7 @@ all: light-runner.hex
 
 # build an AVR executable
 %.elf: %.o
-	$(CC) -mmcu=atmega328p $^ -o $@
+	$(CC) -mmcu=atmega328p $(LDFLAGS) $^ -o $@
 
 # extract the text and data sections to form a programmable file (Intel hex format)
 %.hex: %.elf
@@ -53,7 +55,7 @@ change-color:
 	./send_palette.py
 
 clean:
-	rm -rf light-runner.hex
+	rm -rf light-runner.hex light-runner.elf light-runner.o
 
 .PHONY: all install change-color clean
 .SECONDARY: light-runner.elf light-runner.o
